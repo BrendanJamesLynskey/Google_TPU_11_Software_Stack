@@ -1,0 +1,558 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Google TPUs 11 &mdash; Software Stack: XLA, JAX, Pallas</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+    <style>
+        :root { --bg-primary:#0a0a0a; --bg-card:#0d1117; --bg-code:#161b22; --text-primary:#e6edf3; --text-secondary:#8b949e; --accent:#4285F4; --accent-dim:#4285F444; --accent-glow:#4285F433; --accent-2:#EA4335; --accent-3:#FBBC04; --accent-4:#34A853; --border:#21262d; --font-display:'Space Grotesk',sans-serif; --font-mono:'JetBrains Mono','Fira Code',monospace; --font-body:'Inter',sans-serif; --max-width:900px; }
+        *,*::before,*::after { box-sizing:border-box; margin:0; padding:0; }
+        html { scroll-behavior:smooth; }
+        body { background:var(--bg-primary); color:var(--text-primary); font-family:var(--font-body); font-size:17px; line-height:1.7; overflow-x:hidden; }
+        .hero { min-height:100vh; display:flex; flex-direction:column; justify-content:center; align-items:center; padding:2rem 1.5rem; text-align:center; position:relative; }
+        .hero::before { content:''; position:absolute; top:0; left:50%; transform:translateX(-50%); width:700px; height:600px; background:radial-gradient(circle,var(--accent-glow) 0%,transparent 70%); pointer-events:none; z-index:0; }
+        .hero > * { position:relative; z-index:1; }
+        .series-label { font-family:var(--font-mono); font-size:0.85rem; color:var(--accent); letter-spacing:0.15em; text-transform:uppercase; margin-bottom:1rem; }
+        .hero h1 { font-family:var(--font-display); font-size:clamp(2rem,5vw,3.2rem); font-weight:700; line-height:1.2; margin-bottom:1rem; }
+        .hero h1 .accent { color:var(--accent); }
+        .hero .subtitle { font-size:1.1rem; color:var(--text-secondary); max-width:640px; margin-bottom:2rem; }
+        .tags { display:flex; flex-wrap:wrap; gap:0.5rem; justify-content:center; margin-bottom:2.5rem; }
+        .tag { font-family:var(--font-mono); font-size:0.75rem; padding:0.25rem 0.75rem; border-radius:999px; border:1px solid var(--accent); color:var(--accent); background:var(--accent-dim); }
+        .pipeline { display:flex; flex-wrap:wrap; align-items:center; justify-content:center; gap:0.25rem; margin-bottom:1rem; max-width:var(--max-width); }
+        .pipeline-step { font-family:var(--font-mono); font-size:0.7rem; padding:0.3rem 0.7rem; background:var(--bg-card); border:1px solid var(--border); border-radius:4px; color:var(--text-secondary); }
+        .pipeline-arrow { color:var(--accent); font-size:0.9rem; font-weight:700; }
+        .slide { min-height:100vh; max-width:var(--max-width); margin:0 auto; padding:4rem 1.5rem; position:relative; display:flex; flex-direction:column; justify-content:center; }
+        .slide-number { font-family:var(--font-display); font-size:5rem; font-weight:700; color:var(--accent-dim); position:absolute; top:2rem; right:1.5rem; line-height:1; }
+        .slide h2 { font-family:var(--font-display); font-size:1.9rem; font-weight:700; color:var(--accent); margin-bottom:1.5rem; line-height:1.25; }
+        .slide h3 { font-family:var(--font-display); font-size:1.3rem; font-weight:600; color:var(--text-primary); margin-top:1.5rem; margin-bottom:0.75rem; }
+        .slide p { margin-bottom:1rem; color:var(--text-secondary); }
+        .slide p strong { color:var(--text-primary); }
+        .slide ul, .slide ol { margin-bottom:1rem; padding-left:1.5rem; color:var(--text-secondary); }
+        .slide li { margin-bottom:0.4rem; }
+        .slide li strong { color:var(--text-primary); }
+        .table-wrap { overflow-x:auto; margin:1.25rem 0; border-radius:8px; border:1px solid var(--border); }
+        table { width:100%; border-collapse:collapse; font-size:0.9rem; }
+        th { background:var(--bg-code); color:var(--accent); font-weight:600; text-align:left; padding:0.75rem 1rem; border-bottom:1px solid var(--border); font-family:var(--font-display); white-space:nowrap; }
+        td { padding:0.6rem 1rem; border-bottom:1px solid var(--border); color:var(--text-secondary); vertical-align:top; }
+        tr:last-child td { border-bottom:none; }
+        tr:nth-child(even) td { background:rgba(13,17,23,0.5); }
+        .diagram-grid { display:grid; gap:0.75rem; margin:1.5rem 0; padding:1.5rem; background:var(--bg-card); border:1px solid var(--border); border-radius:8px; }
+        .diagram-grid.cols-2 { grid-template-columns:1fr 1fr; }
+        .diagram-grid.cols-3 { grid-template-columns:1fr 1fr 1fr; }
+        .diagram-panel { padding:1rem; background:var(--bg-code); border:1px solid var(--border); border-radius:6px; }
+        .diagram-panel.accent-border { border-left:3px solid var(--accent); }
+        .diagram-panel.r { border-left:3px solid var(--accent-2); }
+        .diagram-panel.y { border-left:3px solid var(--accent-3); }
+        .diagram-panel.g { border-left:3px solid var(--accent-4); }
+        .diagram-panel h4 { font-family:var(--font-display); font-size:1rem; color:var(--accent); margin-bottom:0.5rem; }
+        .diagram-panel.r h4 { color:var(--accent-2); }
+        .diagram-panel.y h4 { color:var(--accent-3); }
+        .diagram-panel.g h4 { color:var(--accent-4); }
+        .diagram-panel p, .diagram-panel ul { font-size:0.9rem; }
+        .callout { background:var(--bg-card); border-left:3px solid var(--accent); border-radius:0 8px 8px 0; padding:1rem 1.25rem; margin:1.25rem 0; }
+        .callout p { margin-bottom:0; }
+        .callout .callout-label { font-family:var(--font-mono); font-size:0.75rem; color:var(--accent); text-transform:uppercase; letter-spacing:0.1em; margin-bottom:0.3rem; }
+        .canvas-wrap { background:var(--bg-card); border:1px solid var(--border); border-radius:8px; padding:1rem; margin:1.25rem 0; overflow-x:auto; }
+        .code-block { background:var(--bg-code); border:1px solid var(--border); border-radius:8px; margin:1.25rem 0; overflow:hidden; }
+        .code-header { font-family:var(--font-mono); font-size:0.75rem; color:var(--accent); background:rgba(66,133,244,0.08); padding:0.4rem 1rem; border-bottom:1px solid var(--border); }
+        .code-block pre { margin:0; padding:1rem; overflow-x:auto; }
+        .code-block code { font-family:var(--font-mono); font-size:0.82rem; line-height:1.6; color:#c9d1d9; }
+        .kw{color:#ff7b72;} .fn{color:#d2a8ff;} .str{color:#a5d6ff;} .cm{color:#8b949e;font-style:italic;} .num{color:#79c0ff;} .type{color:#ffa657;}
+        .contents-list { list-style:none; padding-left:0; counter-reset:contents; }
+        .contents-list li { counter-increment:contents; padding:0.6rem 0; border-bottom:1px solid var(--border); display:flex; align-items:center; gap:1rem; }
+        .contents-list li:last-child { border-bottom:none; }
+        .contents-list li::before { content:counter(contents,decimal-leading-zero); font-family:var(--font-mono); font-size:0.85rem; color:var(--accent); min-width:2rem; }
+        .contents-list a { color:var(--text-primary); text-decoration:none; }
+        .contents-list a:hover { color:var(--accent); }
+        .footer { text-align:center; padding:3rem 1.5rem; color:var(--text-secondary); font-size:0.85rem; border-top:1px solid var(--border); max-width:var(--max-width); margin:0 auto; }
+        .footer a { color:var(--accent); text-decoration:none; }
+        @media (max-width:640px) { .slide { padding:3rem 1rem; min-height:auto; } .slide-number { font-size:3rem; top:1.5rem; right:1rem; } .slide h2 { font-size:1.5rem; } .diagram-grid.cols-2,.diagram-grid.cols-3 { grid-template-columns:1fr; } .hero h1 { font-size:1.8rem; } table { font-size:0.78rem; } }
+    </style>
+</head>
+<body>
+
+<header class="hero">
+    <div class="series-label">Google TPUs Series &mdash; Presentation 11</div>
+    <h1>The TPU <span class="accent">Software Stack</span> &mdash; XLA, JAX, Pallas</h1>
+    <p class="subtitle">From a Python <code>jax.jit</code> down to LLO machine code on the chip. The compiler, the partitioner, the kernel DSL, the orchestration runtime &mdash; what makes a 9,216-chip pod look like one machine.</p>
+    <div class="tags">
+        <span class="tag">XLA</span><span class="tag">HLO</span><span class="tag">StableHLO</span>
+        <span class="tag">JAX</span><span class="tag">GSPMD</span><span class="tag">Shardy</span>
+        <span class="tag">Pallas</span><span class="tag">Mosaic</span>
+        <span class="tag">PyTorch/XLA</span><span class="tag">MaxText</span>
+        <span class="tag">Pathways</span>
+    </div>
+    <div class="pipeline">
+        <span class="pipeline-step">Python (JAX / PyTorch)</span><span class="pipeline-arrow">&rarr;</span>
+        <span class="pipeline-step">jaxpr / LazyTensor IR</span><span class="pipeline-arrow">&rarr;</span>
+        <span class="pipeline-step">StableHLO</span><span class="pipeline-arrow">&rarr;</span>
+        <span class="pipeline-step">XLA HLO</span><span class="pipeline-arrow">&rarr;</span>
+        <span class="pipeline-step">GSPMD / Shardy</span><span class="pipeline-arrow">&rarr;</span>
+        <span class="pipeline-step">LLO</span><span class="pipeline-arrow">&rarr;</span>
+        <span class="pipeline-step">TPU machine code</span>
+    </div>
+</header>
+
+<section class="slide" id="slide-00">
+    <div class="slide-number">00</div>
+    <h2>Topics We'll Cover</h2>
+    <ul class="contents-list">
+        <li><a href="#slide-01">The Whole Stack on One Slide</a></li>
+        <li><a href="#slide-02">XLA &amp; HLO &mdash; The Compiler Core</a></li>
+        <li><a href="#slide-03">Operator Fusion &amp; Layout Assignment</a></li>
+        <li><a href="#slide-04">OpenXLA &amp; StableHLO</a></li>
+        <li><a href="#slide-05">JAX &mdash; Composable Function Transforms</a></li>
+        <li><a href="#slide-06">Mesh, NamedSharding &amp; GSPMD</a></li>
+        <li><a href="#slide-07">shard_map &mdash; The Manual Counterpart</a></li>
+        <li><a href="#slide-08">Pallas / Mosaic &mdash; Low-Level TPU Kernels</a></li>
+        <li><a href="#slide-09">PyTorch/XLA &rarr; TorchTPU</a></li>
+        <li><a href="#slide-10">MaxText, Pax / Praxis, Flax NNX</a></li>
+        <li><a href="#slide-11">Pathways &amp; Multislice</a></li>
+        <li><a href="#slide-12">Cheat Sheet</a></li>
+    </ul>
+</section>
+
+<section class="slide" id="slide-01">
+    <div class="slide-number">01</div>
+    <h2>The Whole Stack on One Slide</h2>
+    <div class="canvas-wrap">
+        <svg viewBox="0 0 800 380" width="800" height="380" xmlns="http://www.w3.org/2000/svg">
+            <style>
+                .blk { fill:#161b22; stroke:#21262d; }
+                .frame { fill:rgba(66,133,244,0.10); stroke:#4285F4; }
+                .ir { fill:rgba(251,188,4,0.18); stroke:#FBBC04; }
+                .compiler { fill:rgba(52,168,83,0.18); stroke:#34A853; }
+                .runtime { fill:rgba(234,67,53,0.18); stroke:#EA4335; }
+                .lbl { fill:#e6edf3; font-family:'Space Grotesk',sans-serif; font-size:13px; text-anchor:middle; font-weight:600; }
+                .sublbl { fill:#8b949e; font-family:'JetBrains Mono',monospace; font-size:10px; text-anchor:middle; }
+                .arr { stroke:#4285F4; stroke-width:1.4; fill:none; marker-end:url(#m); }
+            </style>
+            <defs><marker id="m" markerWidth="6" markerHeight="6" refX="6" refY="3" orient="auto"><polygon points="0 0, 6 3, 0 6" fill="#4285F4"/></marker></defs>
+            <!-- Frontends -->
+            <rect class="frame" x="20" y="30" width="200" height="60" rx="6"/>
+            <text class="lbl" x="120" y="55">JAX</text>
+            <text class="sublbl" x="120" y="72">jit, grad, vmap, shard_map</text>
+            <rect class="frame" x="240" y="30" width="200" height="60" rx="6"/>
+            <text class="lbl" x="340" y="55">PyTorch / XLA</text>
+            <text class="sublbl" x="340" y="72">LazyTensor, mark_step</text>
+            <rect class="frame" x="460" y="30" width="200" height="60" rx="6"/>
+            <text class="lbl" x="560" y="55">TensorFlow</text>
+            <text class="sublbl" x="560" y="72">tf.function, autograph</text>
+            <rect class="frame" x="680" y="30" width="100" height="60" rx="6"/>
+            <text class="lbl" x="730" y="55">Pallas</text>
+            <text class="sublbl" x="730" y="72">low-level</text>
+            <!-- IR layer -->
+            <line class="arr" x1="120" y1="92" x2="200" y2="120"/>
+            <line class="arr" x1="340" y1="92" x2="320" y2="120"/>
+            <line class="arr" x1="560" y1="92" x2="450" y2="120"/>
+            <rect class="ir" x="180" y="120" width="430" height="50" rx="6"/>
+            <text class="lbl" x="395" y="143">StableHLO</text>
+            <text class="sublbl" x="395" y="160">portable IR · 5-yr backward / 2-yr forward compatibility · MLIR bytecode</text>
+            <!-- HLO -->
+            <line class="arr" x1="395" y1="172" x2="395" y2="200"/>
+            <rect class="ir" x="180" y="200" width="430" height="50" rx="6"/>
+            <text class="lbl" x="395" y="223">XLA HLO</text>
+            <text class="sublbl" x="395" y="240">target-independent passes · fusion · layout assignment · GSPMD partitioning</text>
+            <!-- Pallas direct path -->
+            <line class="arr" x1="730" y1="92" x2="730" y2="262"/>
+            <!-- Backend -->
+            <line class="arr" x1="395" y1="252" x2="395" y2="282"/>
+            <rect class="compiler" x="180" y="282" width="430" height="50" rx="6"/>
+            <text class="lbl" x="395" y="305">TPU backend (LLO codegen)</text>
+            <text class="sublbl" x="395" y="322">low-level operations · MXU schedule · DMA · cycle-accurate VLIW issue</text>
+            <rect class="compiler" x="630" y="282" width="160" height="50" rx="6"/>
+            <text class="lbl" x="710" y="305">Mosaic (TPU)</text>
+            <text class="sublbl" x="710" y="322">Pallas-on-TPU codegen</text>
+            <!-- Hardware -->
+            <line class="arr" x1="395" y1="335" x2="395" y2="355"/>
+            <rect class="runtime" x="100" y="355" width="600" height="20" rx="6"/>
+            <text class="lbl" x="400" y="370" fill="#EA4335">TPU chip · MXU · vector unit · scalar unit · VMEM · CMEM · HBM · ICI</text>
+        </svg>
+    </div>
+
+    <p>Five frontends, two IRs, two compiler backends, one chip. Notice that everything lowers through StableHLO &rarr; HLO. <strong>HLO is the architectural dividing line</strong> &mdash; above it is framework / portability concerns, below it is target-specific code generation.</p>
+</section>
+
+<section class="slide" id="slide-02">
+    <div class="slide-number">02</div>
+    <h2>XLA &amp; HLO &mdash; The Compiler Core</h2>
+    <p>XLA (Accelerated Linear Algebra) was introduced by the TensorFlow team in <strong>February 2017</strong> at the first TensorFlow Developer Summit. It is the compiler that turns ML programs into TPU machine code (and CPU/GPU code via separate backends).</p>
+
+    <div class="diagram-grid cols-2">
+        <div class="diagram-panel accent-border">
+            <h4>HLO &mdash; "High Level Operations"</h4>
+            <ul>
+                <li>Closed opset operating on <strong>immutable tensors with statically-known shapes</strong>.</li>
+                <li>Operations: <code>dot</code>, <code>convolution</code>, <code>reduce</code>, <code>broadcast</code>, <code>reshape</code>, <code>concatenate</code>, <code>while</code>, <code>conditional</code>, <code>fft</code>, <code>scatter</code>, <code>gather</code>, &hellip; (~100 ops).</li>
+                <li>Pure functional style &mdash; ops produce new tensors, never mutate.</li>
+                <li>SSA-form, easy to optimise and reason about.</li>
+            </ul>
+        </div>
+        <div class="diagram-panel y">
+            <h4>What HLO is good for</h4>
+            <ul>
+                <li>Common-subexpression elimination, dead-code removal &mdash; standard compiler passes apply directly.</li>
+                <li>Operator fusion (next slide) is local rewriting on the HLO graph.</li>
+                <li>Sharding and SPMD are graph-level annotations the partitioner consumes.</li>
+                <li>Layout assignment chooses physical tile shapes for each tensor before backend codegen.</li>
+            </ul>
+        </div>
+    </div>
+
+    <h3>The lowering path</h3>
+    <ul>
+        <li><strong>Frontend &rarr; StableHLO.</strong> The framework (JAX / PyTorch / TF) traces user code into an IR; the canonical exchange format is StableHLO.</li>
+        <li><strong>StableHLO &rarr; HLO.</strong> XLA imports StableHLO and runs target-independent middle-end passes.</li>
+        <li><strong>HLO &rarr; LLO.</strong> The TPU backend lowers HLO to LLO ("Low Level Operations") &mdash; a TPU-specific representation expressing the MXU schedule, vector-unit operations, DMA descriptors, and VLIW issue.</li>
+        <li><strong>LLO &rarr; machine code.</strong> Final assembly for the chip.</li>
+    </ul>
+</section>
+
+<section class="slide" id="slide-03">
+    <div class="slide-number">03</div>
+    <h2>Operator Fusion &amp; Layout Assignment</h2>
+    <p>The two XLA passes that drive 80%+ of measured TPU performance.</p>
+
+    <div class="diagram-grid cols-2">
+        <div class="diagram-panel accent-border">
+            <h4>Operator fusion</h4>
+            <p>Multiple HLO ops merged into a single fusion cluster, so intermediate tensors stay in registers / VMEM rather than spilling to HBM. Three flavours:</p>
+            <ul>
+                <li><strong>Loop fusion / element-wise fusion:</strong> sequential pointwise ops (relu &middot; add &middot; mul) become one loop.</li>
+                <li><strong>Input fusion:</strong> multiple consumers of the same producer share a fused kernel (e.g. a tensor feeding both a reduce and a broadcast).</li>
+                <li><strong>Output fusion:</strong> a producer (e.g. <code>dot</code> or <code>conv</code>) fuses with its consumers (often the bias-add, scale, and ReLU after a matmul).</li>
+            </ul>
+        </div>
+        <div class="diagram-panel y">
+            <h4>Layout assignment</h4>
+            <p>Picks the <em>physical layout</em> of each tensor in TPU memory. For TPU specifically:</p>
+            <ul>
+                <li>Tiles match the MXU's 128&times;128 shape to avoid expensive transposes.</li>
+                <li>VMEM tiling chosen so that the working set of one fusion cluster fits in VMEM.</li>
+                <li>Layout decisions interact with sharding choices &mdash; the partitioner picks layouts that minimise cross-shard reshapes.</li>
+                <li>Bad layout = automatic 5&ndash;10&times; slowdown from layout-conversion ops.</li>
+            </ul>
+        </div>
+    </div>
+
+    <h3>The reference paper</h3>
+    <p>Snider &amp; Liang's <em>"Operator Fusion in XLA: Analysis and Evaluation"</em> (arXiv:2301.13062, 2023) is the most thorough public analysis of XLA's fusion passes. Worth a read if you want to understand why your <code>jax.jit</code>'d function is faster than the equivalent imperative loop &mdash; usually the answer is "XLA fused 30 ops into 3 kernels".</p>
+</section>
+
+<section class="slide" id="slide-04">
+    <div class="slide-number">04</div>
+    <h2>OpenXLA &amp; StableHLO</h2>
+
+    <div class="diagram-grid cols-2">
+        <div class="diagram-panel accent-border">
+            <h4>OpenXLA (March 2023)</h4>
+            <ul>
+                <li>Spun out of TensorFlow into the standalone <code>openxla/</code> GitHub organisation.</li>
+                <li>Multi-vendor: AMD, Apple, Arm, Cerebras, Google, Graphcore, Intel, NVIDIA, SiFive, Hugging Face all collaborated on launch.</li>
+                <li>Community-led; not a Linux Foundation project (despite occasional confusion on this point).</li>
+                <li>Repos: <code>openxla/xla</code> (the compiler), <code>openxla/stablehlo</code> (the IR), <code>openxla/iree</code> (an alternative ML runtime).</li>
+            </ul>
+        </div>
+        <div class="diagram-panel y">
+            <h4>StableHLO</h4>
+            <ul>
+                <li>Portability layer between ML frameworks and ML compilers.</li>
+                <li>Built on the MHLO MLIR dialect, with <strong>94 statically-shaped operations</strong>.</li>
+                <li>MLIR-bytecode serialisation &mdash; you can <em>save</em> a StableHLO program and reload it later.</li>
+                <li>Compatibility guarantee: <strong>5 years backward, 2 years forward</strong> per the StableHLO compatibility RFC.</li>
+                <li>The canonical artefact emerging from <code>jax.jit.lower(...).compile(...)</code> &mdash; you can extract it and feed it to other XLA-compatible compilers.</li>
+            </ul>
+        </div>
+    </div>
+
+    <h3>Why this matters</h3>
+    <p>Before StableHLO, the only stable interface to XLA was the Python frontend. Now compilers like IREE, hardware vendors like AMD's ROCm-XLA, and runtime systems can consume StableHLO directly. <strong>The TPU stack is increasingly portable</strong> &mdash; PyTorch can target XLA, JAX programs can be exported and re-run elsewhere, and OpenXLA itself has third-party backends.</p>
+</section>
+
+<section class="slide" id="slide-05">
+    <div class="slide-number">05</div>
+    <h2>JAX &mdash; Composable Function Transforms</h2>
+    <p>JAX started as a Google Brain research project in <strong>2018</strong>. Original team: Matt Johnson, Roy Frostig, Dougal Maclaurin, Chris Leary. Now under the <code>jax-ml/</code> GitHub organisation (moved from <code>google/jax</code>).</p>
+
+    <h3>The four primitives</h3>
+    <div class="code-block">
+        <div class="code-header">JAX function transformations</div>
+        <pre><code><span class="kw">import</span> jax
+<span class="kw">import</span> jax.numpy <span class="kw">as</span> jnp
+
+<span class="kw">def</span> <span class="fn">predict</span>(params, x):
+    <span class="kw">return</span> jnp.tanh(x @ params[<span class="str">'W'</span>] + params[<span class="str">'b'</span>])
+
+<span class="cm"># jit — trace, lower to StableHLO, compile, cache</span>
+fast_predict = jax.jit(predict)
+
+<span class="cm"># grad — reverse-mode automatic differentiation</span>
+loss_grad = jax.grad(<span class="kw">lambda</span> p, x, y: jnp.mean((predict(p, x) - y) ** <span class="num">2</span>))
+
+<span class="cm"># vmap — automatic vectorisation across a batch axis</span>
+batched_predict = jax.vmap(predict, in_axes=(<span class="kw">None</span>, <span class="num">0</span>))
+
+<span class="cm"># pmap (legacy) / jit + sharding (modern) — multi-device SPMD</span>
+sharded_predict = jax.jit(predict, in_shardings=...)</code></pre>
+    </div>
+
+    <h3>The composability invariant</h3>
+    <p>Any JAX transform can wrap any other JAX transform. <code>jit(grad(vmap(f)))</code> is meaningful: vectorise <em>f</em> over a batch axis, take its gradient, then JIT-compile the whole thing. This composability is what makes JAX uniquely productive for research code &mdash; you can write a small, clean function, then wrap it in transforms to scale it to a TPU pod.</p>
+
+    <div class="callout">
+        <div class="callout-label">pmap is legacy</div>
+        <p>The original SPMD primitive in JAX was <code>pmap</code> &mdash; "parallel map" across devices. Modern JAX uses <code>jax.jit</code> with explicit shardings (GSPMD-managed) for automatic SPMD, and <code>shard_map</code> for the manual counterpart. <code>pmap</code> still works but isn't the recommended path for new code.</p>
+    </div>
+</section>
+
+<section class="slide" id="slide-06">
+    <div class="slide-number">06</div>
+    <h2>Mesh, NamedSharding &amp; GSPMD</h2>
+    <p>This is the abstraction that turns a 9,216-chip pod into a single mesh you can shard tensors across.</p>
+
+    <div class="code-block">
+        <div class="code-header">a 4-axis pod mesh, with sharded tensors</div>
+        <pre><code><span class="kw">from</span> jax.sharding <span class="kw">import</span> Mesh, NamedSharding, PartitionSpec <span class="kw">as</span> P
+<span class="kw">import</span> numpy <span class="kw">as</span> np
+
+<span class="cm"># a 9,216-chip Ironwood pod arranged as 4 axes</span>
+devices = np.asarray(jax.devices()).reshape(<span class="num">8</span>, <span class="num">8</span>, <span class="num">12</span>, <span class="num">12</span>)
+mesh = Mesh(devices, axis_names=(<span class="str">'data'</span>, <span class="str">'fsdp'</span>, <span class="str">'tensor'</span>, <span class="str">'expert'</span>))
+
+<span class="cm"># weight matrix sharded across 'tensor' and 'expert' axes</span>
+W = jax.device_put(W, NamedSharding(mesh, P(<span class="str">'tensor'</span>, <span class="str">'expert'</span>)))
+
+<span class="cm"># input batch sharded across 'data' (and replicated across the rest)</span>
+x = jax.device_put(x, NamedSharding(mesh, P(<span class="str">'data'</span>, <span class="kw">None</span>)))
+
+<span class="cm"># JIT the model — GSPMD will figure out where to insert collectives</span>
+y = jax.jit(model)(W, x)</code></pre>
+    </div>
+
+    <h3>What GSPMD does for you</h3>
+    <ul>
+        <li>Propagates the input shardings through every operation in your function.</li>
+        <li>Infers shardings for intermediates that the user didn't annotate.</li>
+        <li>Inserts <code>all-reduce</code>, <code>all-gather</code>, <code>reduce-scatter</code>, <code>all-to-all</code> collectives where the shardings disagree.</li>
+        <li>Optimises collective placement to overlap with compute when possible.</li>
+        <li>Reference: Xu et al., <em>"GSPMD: General and Scalable Parallelization for ML Computation Graphs"</em>, 2021.</li>
+    </ul>
+
+    <h3>Shardy &mdash; the successor</h3>
+    <p><strong>Shardy</strong> is the new MLIR-based partitioner that's gradually replacing GSPMD as XLA's sharding system. Same conceptual model (tensors annotated with shardings, compiler inserts collectives), more uniform IR representation. New code should expect Shardy semantics; old code keeps working.</p>
+</section>
+
+<section class="slide" id="slide-07">
+    <div class="slide-number">07</div>
+    <h2>shard_map &mdash; The Manual Counterpart</h2>
+    <p>GSPMD is automatic; <code>shard_map</code> is manual. You write per-device code with explicit collectives, and the compiler hands each shard to a device.</p>
+
+    <div class="code-block">
+        <div class="code-header">manual collectives via shard_map</div>
+        <pre><code><span class="kw">from</span> jax.experimental.shard_map <span class="kw">import</span> shard_map
+
+<span class="kw">def</span> <span class="fn">tensor_parallel_matmul</span>(W_local, x_local):
+    <span class="cm"># compute local partial product</span>
+    partial = x_local @ W_local
+    <span class="cm"># sum across the 'tensor' axis to produce the full result</span>
+    <span class="kw">return</span> jax.lax.psum(partial, <span class="str">'tensor'</span>)
+
+<span class="cm"># map over the mesh, with explicit input/output partition specs</span>
+y = shard_map(
+    tensor_parallel_matmul,
+    mesh=mesh,
+    in_specs=(P(<span class="kw">None</span>, <span class="str">'tensor'</span>), P(<span class="str">'data'</span>, <span class="kw">None</span>)),
+    out_specs=P(<span class="str">'data'</span>, <span class="kw">None</span>),
+)(W, x)</code></pre>
+    </div>
+
+    <h3>When to use which</h3>
+    <ul>
+        <li><strong>jit + GSPMD</strong> &mdash; high-level, automatic. Good for most training runs; optimal in 80%+ of cases.</li>
+        <li><strong>shard_map</strong> &mdash; manual, explicit. When you want a non-standard collective pattern (e.g. ring-all-reduce overlapped with compute, custom expert routing in MoE), or when GSPMD's inferences are suboptimal.</li>
+    </ul>
+
+    <p>The two compose: you can <code>shard_map</code> a function and then <code>jit</code> the result; you can have GSPMD-managed regions calling <code>shard_map</code>'d kernels. The choice is per-function, not per-program.</p>
+</section>
+
+<section class="slide" id="slide-08">
+    <div class="slide-number">08</div>
+    <h2>Pallas / Mosaic &mdash; Low-Level TPU Kernels</h2>
+    <p><strong>Pallas</strong> is a JAX-embedded kernel DSL, conceptually equivalent to Triton on GPU. The same Python source can target multiple backends; on TPU, Pallas lowers through <strong>Mosaic</strong>, an MLIR-based TPU kernel compiler.</p>
+
+    <div class="code-block">
+        <div class="code-header">a Pallas matmul kernel</div>
+        <pre><code><span class="kw">from</span> jax.experimental <span class="kw">import</span> pallas <span class="kw">as</span> pl
+
+<span class="kw">def</span> <span class="fn">matmul_kernel</span>(x_ref, w_ref, out_ref):
+    out_ref[<span class="num">...</span>] = x_ref[<span class="num">...</span>] @ w_ref[<span class="num">...</span>]
+
+<span class="cm"># BlockSpec tells Pallas how to tile each input from HBM into VMEM</span>
+matmul = pl.pallas_call(
+    matmul_kernel,
+    out_shape=jax.ShapeDtypeStruct((<span class="num">M</span>, <span class="num">N</span>), jnp.bfloat16),
+    grid=(<span class="num">M</span>//<span class="num">128</span>, <span class="num">N</span>//<span class="num">128</span>),
+    in_specs=[
+        pl.BlockSpec(block_shape=(<span class="num">128</span>, <span class="num">K</span>), index_map=<span class="kw">lambda</span> i, j: (i, <span class="num">0</span>)),
+        pl.BlockSpec(block_shape=(<span class="num">K</span>, <span class="num">128</span>), index_map=<span class="kw">lambda</span> i, j: (<span class="num">0</span>, j)),
+    ],
+    out_specs=pl.BlockSpec(block_shape=(<span class="num">128</span>, <span class="num">128</span>), index_map=<span class="kw">lambda</span> i, j: (i, j)),
+)</code></pre>
+    </div>
+
+    <h3>What Pallas-on-TPU lets you do</h3>
+    <ul>
+        <li>Write a kernel with explicit VMEM tile management (the <code>BlockSpec</code> says "bring this HBM region into VMEM for each step").</li>
+        <li>Control double-buffering: <code>pltpu.emit_pipeline</code> handles HBM&harr;VMEM software pipelining around an inner kernel.</li>
+        <li>Issue ICI sends/receives: outer pipelines can communicate between chips for things like sequence-parallel attention.</li>
+        <li>Get within ~5&ndash;10% of hand-written XLA performance on standard ops &mdash; and write things XLA can't fuse easily (FlashAttention variants, custom MoE routing).</li>
+    </ul>
+
+    <p>Pallas-on-GPU exists too (lowers to Triton or Mosaic GPU). The same source compiles to either &mdash; one of the few real cross-vendor kernel-DSL stories.</p>
+</section>
+
+<section class="slide" id="slide-09">
+    <div class="slide-number">09</div>
+    <h2>PyTorch/XLA &rarr; TorchTPU</h2>
+    <p>PyTorch on TPU has been an option since 2018, via the <strong>PyTorch/XLA</strong> bridge. As of late 2025, Google has announced <strong>TorchTPU</strong>, a project to run PyTorch <em>natively</em> on TPUs that will eventually replace PyTorch/XLA.</p>
+
+    <div class="diagram-grid cols-2">
+        <div class="diagram-panel accent-border">
+            <h4>PyTorch/XLA (current)</h4>
+            <ul>
+                <li><strong>LazyTensor</strong> graph capture: PyTorch ops on XLA tensors aren't executed eagerly, they're recorded into an IR graph.</li>
+                <li>Materialised at <strong>barriers</strong>: <code>xm.mark_step()</code>, <code>.item()</code>, <code>print()</code>, etc.</li>
+                <li>The captured graph is lowered to HLO, compiled by XLA, cached by shape signature.</li>
+                <li>First-call compile is expensive (sometimes minutes for big LLMs); recompiles trigger on shape changes or graph breaks.</li>
+                <li>Steady-state performance is fully fused TPU-native execution.</li>
+            </ul>
+        </div>
+        <div class="diagram-panel y">
+            <h4>TorchTPU (announced late 2025)</h4>
+            <ul>
+                <li>Native PyTorch backend for TPU &mdash; not via the XLA bridge.</li>
+                <li>Goal: eager-mode performance and native PyTorch ergonomics on TPU, without LazyTensor's compile-cost surprises.</li>
+                <li>Roadmap published for 2026 GA; PyTorch/XLA remains the production path until then.</li>
+                <li>Reference implementations under <code>AI-Hypercomputer/torchprime</code> (Llama 3 etc., FSDP, multislice).</li>
+            </ul>
+        </div>
+    </div>
+
+    <h3>Practical advice for May 2026</h3>
+    <ul>
+        <li>For new TPU work, JAX is the most-supported, best-documented frontend.</li>
+        <li>For existing PyTorch codebases, PyTorch/XLA still works; expect TorchTPU to land through 2026 and gradually take over.</li>
+        <li>For inference serving on Ironwood specifically, JAX is required &mdash; the chip's GA path doesn't yet support PyTorch natively.</li>
+    </ul>
+</section>
+
+<section class="slide" id="slide-10">
+    <div class="slide-number">10</div>
+    <h2>MaxText, Pax / Praxis, Flax NNX</h2>
+    <p>The higher-level libraries that sit on top of JAX for actual model training.</p>
+
+    <div class="diagram-grid cols-2">
+        <div class="diagram-panel accent-border">
+            <h4>MaxText (the public flagship)</h4>
+            <ul>
+                <li>Pure JAX/Flax LLM training reference under <code>AI-Hypercomputer/maxtext</code>.</li>
+                <li>Targets TPU and GPU equally well.</li>
+                <li>Composes Flax (model definition), Optax (optimisers), Orbax (checkpointing), Grain (data loading), Tunix (post-training).</li>
+                <li>Used in the Cloud TPU docs as the canonical "how to train an LLM" example.</li>
+                <li>Most-active open source TPU LLM stack.</li>
+            </ul>
+        </div>
+        <div class="diagram-panel y">
+            <h4>Pax / Praxis (Google internal)</h4>
+            <ul>
+                <li><strong>Praxis</strong> = the model-and-layer library; <strong>Pax</strong> = the trainer.</li>
+                <li>Used internally for PaLM-class and Gemini training.</li>
+                <li>Public release as <code>paxml</code> on GitHub.</li>
+                <li>More opinionated than MaxText; baked-in patterns for Google-style training runs.</li>
+            </ul>
+        </div>
+    </div>
+
+    <h3>Flax &amp; Flax NNX</h3>
+    <ul>
+        <li><strong>Flax</strong> is the most widely used JAX neural-net library.</li>
+        <li>Original API: <code>flax.linen</code>, functional / explicit-state.</li>
+        <li><strong>Flax NNX (2024)</strong>: new API with reference semantics, mutable modules, more PyTorch-like ergonomics. Becoming the default for new code.</li>
+        <li>DeepMind's <strong>Haiku</strong> is the older alternative; in maintenance, with internal teams migrating to Flax NNX.</li>
+    </ul>
+
+    <h3>Tunix &mdash; post-training</h3>
+    <p>Google's JAX-native library for LLM post-training (SFT, RLHF, DPO, GRPO). Released 2024; actively developed. The TPU answer to TRL and OpenRLHF in the GPU world.</p>
+</section>
+
+<section class="slide" id="slide-11">
+    <div class="slide-number">11</div>
+    <h2>Pathways &amp; Multislice</h2>
+    <p>The orchestration layer for very-large training.</p>
+
+    <div class="diagram-grid cols-2">
+        <div class="diagram-panel accent-border">
+            <h4>Pathways</h4>
+            <ul>
+                <li>Single-controller, asynchronous distributed dataflow runtime.</li>
+                <li>Reference: Barham, Dean, Ghemawat et al., <em>"Pathways: Asynchronous Distributed Dataflow for ML"</em>, MLSys 2022, arXiv:2203.12533.</li>
+                <li>Authors include Jeff Dean and Sanjay Ghemawat &mdash; the architects of Google search itself.</li>
+                <li>One Python client &rarr; thousands of TPU workers across multiple pods.</li>
+                <li>Trained PaLM 540B on 6,144 TPU v4 chips across multiple pods.</li>
+                <li>Now exposed externally as <strong>Pathways on Cloud</strong>.</li>
+            </ul>
+        </div>
+        <div class="diagram-panel y">
+            <h4>Multislice</h4>
+            <ul>
+                <li>Cloud TPU feature, announced August 2023.</li>
+                <li>Lets a single training job span multiple TPU slices over Jupiter DCN.</li>
+                <li>Inside each slice: high-bandwidth ICI.</li>
+                <li>Between slices: Jupiter DCN at microsecond latency.</li>
+                <li>Required for any training that exceeds one pod's chip count.</li>
+                <li>Available on v4, v5e, v5p, Trillium, Ironwood.</li>
+            </ul>
+        </div>
+    </div>
+
+    <h3>Cloud TPU provisioning APIs</h3>
+    <ul>
+        <li><strong>Cloud TPU VM</strong>: SSH-able host attached to TPU chips. The modern API (replaced "TPU Node").</li>
+        <li><strong>Queued Resources</strong>: async request for a slice shape; queue waits until capacity is free.</li>
+        <li><strong>GKE TPU node pools</strong>: TPUs as Kubernetes resources, with multi-host slice support since GKE 1.27.2-gke.1500.</li>
+        <li><strong>Pathways on Cloud</strong>: for jobs that exceed one slice or need async resharding.</li>
+    </ul>
+</section>
+
+<section class="slide" id="slide-12">
+    <div class="slide-number">12</div>
+    <h2>Cheat Sheet</h2>
+    <ul>
+        <li><strong>XLA</strong> (Feb 2017): Google's ML compiler. Turns ML programs into TPU/GPU/CPU code via two IRs &mdash; StableHLO (portable) and HLO (target-independent middle-end).</li>
+        <li><strong>HLO</strong> ops: ~100, statically-shaped immutable tensors. Operator fusion + layout assignment do most of the perf work.</li>
+        <li><strong>StableHLO</strong>: portable IR. 94 ops, MLIR bytecode, 5-yr backward / 2-yr forward compatibility.</li>
+        <li><strong>OpenXLA (March 2023)</strong>: spun out of TF as multi-vendor open-source. Apple, AMD, Arm, NVIDIA, Intel, Google, Cerebras.</li>
+        <li><strong>JAX</strong> (2018): Johnson, Frostig, Maclaurin, Leary. <code>jit</code>, <code>grad</code>, <code>vmap</code>, <code>pmap</code> (legacy). Composable transforms.</li>
+        <li><strong>Mesh + NamedSharding + GSPMD</strong>: the SPMD abstraction that turns a 9,216-chip pod into one mesh. Shardy is the new MLIR successor.</li>
+        <li><strong>shard_map</strong>: manual SPMD with explicit collectives. Composable with <code>jit</code>.</li>
+        <li><strong>Pallas / Mosaic</strong>: low-level kernel DSL for TPU (and GPU, via Triton or Mosaic GPU). Explicit VMEM tiling, software pipelining.</li>
+        <li><strong>PyTorch/XLA</strong>: LazyTensor graph capture. <strong>TorchTPU</strong> (announced late 2025) will eventually replace it.</li>
+        <li><strong>MaxText</strong>: public reference LLM stack. <strong>Pax/Praxis</strong>: Google internal. <strong>Flax NNX</strong>: modern model-definition library. <strong>Tunix</strong>: post-training.</li>
+        <li><strong>Pathways</strong>: single-controller multi-pod orchestration (PaLM, Gemini). <strong>Multislice</strong>: cloud-product version, since v5.</li>
+    </ul>
+
+    <div class="callout">
+        <div class="callout-label">Read next</div>
+        <p>Deck <strong>12 &mdash; TPU vs GPU</strong> ties the silicon and software together by contrasting both sides of the divide.</p>
+    </div>
+</section>
+
+<footer class="footer">
+    <p>Part of the <a href="https://github.com/BrendanJamesLynskey/LLM_Hub_Google_TPUs">Google TPUs</a> series. Sources: openxla.org/xla docs; TensorFlow Developer Summit "XLA, TensorFlow, compiled" (Feb 2017); Snider &amp; Liang "Operator Fusion in XLA", arXiv:2301.13062; Bradbury et al. JAX (2018); Xu et al. "GSPMD" (2021); Barham, Dean, Ghemawat et al. "Pathways" MLSys 2022 (arXiv:2203.12533); JAX official docs (docs.jax.dev); AI-Hypercomputer/maxtext &amp; AI-Hypercomputer/torchprime GitHub orgs.</p>
+</footer>
+
+</body>
+</html>
