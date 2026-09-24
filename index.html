@@ -8,7 +8,7 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
     <style>
-        :root { --bg-primary:#0a0a0a; --bg-card:#0d1117; --bg-code:#161b22; --text-primary:#e6edf3; --text-secondary:#8b949e; --accent:#4285F4; --accent-dim:#4285F444; --accent-glow:#4285F433; --accent-2:#EA4335; --accent-3:#FBBC04; --accent-4:#34A853; --border:#21262d; --font-display:'Space Grotesk',sans-serif; --font-mono:'JetBrains Mono','Fira Code',monospace; --font-body:'Inter',sans-serif; --max-width:900px; }
+        :root { --bg-primary:#f3efe6; --bg-card:#ebe6da; --bg-code:#e2dcce; --text-primary:#1b1a18; --text-secondary:#625c52; --accent:#355ec6; --accent-dim:#355ec644; --accent-glow:#355ec61a; --accent-2:#ee3218; --accent-3:#8b6a0d; --accent-4:#458f5d; --border:#d0c9b8; --font-display:'Space Grotesk',sans-serif; --font-mono:'JetBrains Mono','Fira Code',monospace; --font-body:'Inter',sans-serif; --max-width:900px; }
         *,*::before,*::after { box-sizing:border-box; margin:0; padding:0; }
         html { scroll-behavior:smooth; }
         body { background:var(--bg-primary); color:var(--text-primary); font-family:var(--font-body); font-size:17px; line-height:1.7; overflow-x:hidden; }
@@ -38,7 +38,7 @@
         th { background:var(--bg-code); color:var(--accent); font-weight:600; text-align:left; padding:0.75rem 1rem; border-bottom:1px solid var(--border); font-family:var(--font-display); white-space:nowrap; }
         td { padding:0.6rem 1rem; border-bottom:1px solid var(--border); color:var(--text-secondary); vertical-align:top; }
         tr:last-child td { border-bottom:none; }
-        tr:nth-child(even) td { background:rgba(13,17,23,0.5); }
+        tr:nth-child(even) td { background:rgba(235,230,218,0.5); }
         .diagram-grid { display:grid; gap:0.75rem; margin:1.5rem 0; padding:1.5rem; background:var(--bg-card); border:1px solid var(--border); border-radius:8px; }
         .diagram-grid.cols-2 { grid-template-columns:1fr 1fr; }
         .diagram-grid.cols-3 { grid-template-columns:1fr 1fr 1fr; }
@@ -57,10 +57,10 @@
         .callout .callout-label { font-family:var(--font-mono); font-size:0.75rem; color:var(--accent); text-transform:uppercase; letter-spacing:0.1em; margin-bottom:0.3rem; }
         .canvas-wrap { background:var(--bg-card); border:1px solid var(--border); border-radius:8px; padding:1rem; margin:1.25rem 0; overflow-x:auto; }
         .code-block { background:var(--bg-code); border:1px solid var(--border); border-radius:8px; margin:1.25rem 0; overflow:hidden; }
-        .code-header { font-family:var(--font-mono); font-size:0.75rem; color:var(--accent); background:rgba(66,133,244,0.08); padding:0.4rem 1rem; border-bottom:1px solid var(--border); }
+        .code-header { font-family:var(--font-mono); font-size:0.75rem; color:var(--accent); background:rgba(53,94,198,0.08); padding:0.4rem 1rem; border-bottom:1px solid var(--border); }
         .code-block pre { margin:0; padding:1rem; overflow-x:auto; }
-        .code-block code { font-family:var(--font-mono); font-size:0.82rem; line-height:1.6; color:#c9d1d9; }
-        .kw{color:#ff7b72;} .fn{color:#d2a8ff;} .str{color:#a5d6ff;} .cm{color:#8b949e;font-style:italic;} .num{color:#79c0ff;} .type{color:#ffa657;}
+        .code-block code { font-family:var(--font-mono); font-size:0.82rem; line-height:1.6; color:#2f2d29; }
+        .kw{color:#bb3023;} .fn{color:#452a68;} .str{color:#182d4d;} .cm{color:#625c52;font-style:italic;} .num{color:#143c76;} .type{color:#af771b;}
         .contents-list { list-style:none; padding-left:0; counter-reset:contents; }
         .contents-list li { counter-increment:contents; padding:0.6rem 0; border-bottom:1px solid var(--border); display:flex; align-items:center; gap:1rem; }
         .contents-list li:last-child { border-bottom:none; }
@@ -121,16 +121,16 @@
     <div class="canvas-wrap">
         <svg viewBox="0 0 800 380" width="800" height="380" xmlns="http://www.w3.org/2000/svg">
             <style>
-                .blk { fill:#161b22; stroke:#21262d; }
-                .frame { fill:rgba(66,133,244,0.10); stroke:#4285F4; }
-                .ir { fill:rgba(251,188,4,0.18); stroke:#FBBC04; }
-                .compiler { fill:rgba(52,168,83,0.18); stroke:#34A853; }
-                .runtime { fill:rgba(234,67,53,0.18); stroke:#EA4335; }
-                .lbl { fill:#e6edf3; font-family:'Space Grotesk',sans-serif; font-size:13px; text-anchor:middle; font-weight:600; }
-                .sublbl { fill:#8b949e; font-family:'JetBrains Mono',monospace; font-size:10px; text-anchor:middle; }
-                .arr { stroke:#4285F4; stroke-width:1.4; fill:none; marker-end:url(#m); }
+                .blk { fill:#e2dcce; stroke:#d0c9b8; }
+                .frame { fill:rgba(53,94,198,0.10); stroke:#355ec6; }
+                .ir { fill:rgba(139,106,13,0.18); stroke:#8b6a0d; }
+                .compiler { fill:rgba(69,143,93,0.18); stroke:#458f5d; }
+                .runtime { fill:rgba(238,50,24,0.18); stroke:#ee3218; }
+                .lbl { fill:#1b1a18; font-family:'Space Grotesk',sans-serif; font-size:13px; text-anchor:middle; font-weight:600; }
+                .sublbl { fill:#625c52; font-family:'JetBrains Mono',monospace; font-size:10px; text-anchor:middle; }
+                .arr { stroke:#355ec6; stroke-width:1.4; fill:none; marker-end:url(#m); }
             </style>
-            <defs><marker id="m" markerWidth="6" markerHeight="6" refX="6" refY="3" orient="auto"><polygon points="0 0, 6 3, 0 6" fill="#4285F4"/></marker></defs>
+            <defs><marker id="m" markerWidth="6" markerHeight="6" refX="6" refY="3" orient="auto"><polygon points="0 0, 6 3, 0 6" fill="#355ec6"/></marker></defs>
             <!-- Frontends -->
             <rect class="frame" x="20" y="30" width="200" height="60" rx="6"/>
             <text class="lbl" x="120" y="55">JAX</text>
@@ -169,7 +169,7 @@
             <!-- Hardware -->
             <line class="arr" x1="395" y1="335" x2="395" y2="355"/>
             <rect class="runtime" x="100" y="355" width="600" height="20" rx="6"/>
-            <text class="lbl" x="400" y="370" fill="#EA4335">TPU chip · MXU · vector unit · scalar unit · VMEM · CMEM · HBM · ICI</text>
+            <text class="lbl" x="400" y="370" fill="#ee3218">TPU chip · MXU · vector unit · scalar unit · VMEM · CMEM · HBM · ICI</text>
         </svg>
     </div>
 
